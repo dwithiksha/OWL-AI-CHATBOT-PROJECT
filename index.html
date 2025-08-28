@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Owl Ai</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#0f172a">
+</head>
+<body data-theme="dark">
+    <div class="chat-app">
+        <header class="chat-header">
+            <div class="brand">
+                <img class="brand-logo" alt="Owl AI" src="https://static.vecteezy.com/system/resources/thumbnails/007/955/139/small_2x/black-owl-logo-free-vector.jpg"/>
+                <span>Owl Ai</span>
+        </div>
+            <div class="header-actions">
+                <select id="palette-select" class="btn" title="Color style">
+                    <option value="">Classic</option>
+                    <option value="lavender">Lavender</option>
+                    <option value="emerald">Emerald</option>
+                    <option value="rose">Rose</option>
+                    <option value="midnight">Midnight</option>
+                </select>
+                <button id="notify-toggle" class="btn" title="Enable notifications"><i class="fas fa-bell"></i></button>
+                <button id="reminders-btn" class="btn" title="Reminders"><i class="fas fa-clock"></i></button>
+    </div>
+        </header>
+
+        <main class="chat-main">
+            <section id="messages" class="messages">
+                <div class="message ai">
+                    <div class="avatar"><img alt="AI" class="avatar-img" src="https://static.vecteezy.com/system/resources/thumbnails/007/955/139/small_2x/black-owl-logo-free-vector.jpg"/></div>
+                    <div class="bubble">
+                        <div class="meta"><span>Owl AI</span><time>Just now</time></div>
+                        <div class="text">Hello! I’m Owl AI. Ask me anything or use the suggestions below.</div>
+                        <div class="tools"><button class="tool like" title="Like"><i class="fas fa-star"></i></button><button class="tool copy" title="Copy"><i class="fas fa-copy"></i></button></div>
+                    </div>
+                </div>
+            </section>
+
+            <footer class="composer">
+                <div class="input-wrap">
+                    <textarea id="input" rows="1" placeholder="Message Owl AI..."></textarea>
+                    <div id="suggestions" class="suggestions-chips" style="display:none"></div>
+                                         <div class="composer-actions">
+                         <span id="char-counter" class="muted">0/2000</span>
+                         <button id="tts" class="btn" title="Play last AI reply"><i class="fas fa-volume-up"></i></button>
+                         <button id="send" class="btn btn-primary"><i class="fas fa-paper-plane"></i></button>
+                     </div>
+                                             </div>
+             </footer>
+         </main>
+     </div>
+
+    <!-- Reminders Modal -->
+    <div id="reminders-modal" class="modal" style="display:none">
+        <div class="modal-card">
+            <div class="modal-head">
+                <h3>Reminders</h3>
+                <button id="reminders-close" class="btn" title="Close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="reminder-form">
+                    <input id="reminder-text" type="text" placeholder="Reminder text..." />
+                    <input id="reminder-datetime" type="datetime-local" />
+                    <button id="reminder-add" class="btn btn-primary">Add</button>
+                </div>
+                <div id="reminders-list" class="reminders-list"></div>
+            </div>
+        </div>
+        <div class="modal-backdrop"></div>
+    </div>
+
+    <template id="tmpl-message">
+        <div class="message">
+            <div class="avatar"></div>
+            <div class="bubble">
+                <div class="meta"><span></span><time></time></div>
+                <div class="text"></div>
+                <div class="tools"><button class="tool copy" title="Copy"><i class="fas fa-copy"></i></button></div>
+                                </div>
+                            </div>
+    </template>
+
+    <script>
+    const el = {
+        messages: document.getElementById('messages'),
+        input: document.getElementById('input'),
+        send: document.getElementById('send'),
+        counter: document.getElementById('char-counter'),
+        palette: document.getElementById('palette-select'),
+        tts: document.getElementById('tts'),
+        notifyToggle: document.getElementById('notify-toggle'),
+        remindersBtn: document.getElementById('reminders-btn')
+    };
+
+    let typing = false;
+
+    function now(){ return new Date(); }
+    function fmtTime(d){ return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+    function escapeHtml(s){ return s.replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[m])); }
+
+    function appendMessage(role, content){
+        const tpl = document.getElementById('tmpl-message').content.cloneNode(true);
+        const root = tpl.querySelector('.message');
+        root.classList.add(role==='user'?'user':'ai');
+        const avatar = tpl.querySelector('.avatar');
+        avatar.innerHTML = role==='user' ? '<i class="fas fa-user"></i>' : '<img alt="AI" class="avatar-img" src="https://static.vecteezy.com/system/resources/thumbnails/007/955/139/small_2x/black-owl-logo-free-vector.jpg"/>';
+        tpl.querySelector('.meta span').textContent = role==='user'?'You':'Owl AI';
+        tpl.querySelector('time').textContent = fmtTime(now());
+        // Typewriter effect for AI messages
+        const textTarget = tpl.querySelector('.text');
+        const renderText = escapeHtml(content).replace(/\n/g,'<br>');
+        if (role === 'ai') {
+            textTarget.innerHTML = '';
+            let i = 0;
+            const step = () => {
+                if (i <= renderText.length) {
+                    textTarget.innerHTML = renderText.slice(0, i);
+                    i += 2;
+                    el.messages.scrollTop = el.messages.scrollHeight;
+                    requestAnimationFrame(step);
+                }
+            };
+            requestAnimationFrame(step);
+        } else {
+            textTarget.innerHTML = renderText;
+        }
+        const likeBtn = tpl.querySelector('.tool.like');
+        if (likeBtn) likeBtn.addEventListener('click', ()=> likeBtn.classList.toggle('active'));
+        tpl.querySelector('.tool.copy').addEventListener('click', ()=>navigator.clipboard.writeText(content));
+        el.messages.appendChild(tpl);
+        el.messages.scrollTop = el.messages.scrollHeight;
+    }
+
+    function showTyping(){
+        typing = true;
+        const d = document.createElement('div'); d.className='typing'; d.id='typing';
+        d.innerHTML = `<div class=\"avatar\"><img alt=\"AI\" class=\"avatar-img\" src=\"https://static.vecteezy.com/system/resources/thumbnails/007/955/139/small_2x/black-owl-logo-free-vector.jpg\"/></div><div class=\"dots\"><span></span><span></span><span></span></div>`;
+        el.messages.appendChild(d); el.messages.scrollTop = el.messages.scrollHeight;
+    }
+    function hideTyping(){ typing = false; const t = document.getElementById('typing'); if(t) t.remove(); }
+
+    async function send(){
+        const text = el.input.value.trim();
+        if(!text || typing) return;
+        appendMessage('user', text);
+        el.input.value = ''; updateCounter(); autoResize();
+        showTyping();
+        try{
+            const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message: text }) });
+            const data = await res.json();
+            hideTyping();
+            appendMessage('ai', data && !data.error ? data.reply : 'Sorry, something went wrong.');
+        }catch(e){ hideTyping(); appendMessage('ai','Error. Please try again.'); }
+    }
+
+    // Suggestions
+    const baseChips = ['Summarize this article','Draft a professional email','Explain in simple terms','Brainstorm 5 ideas','Fix this code snippet'];
+    function renderChips(prefix=''){
+        const box = document.getElementById('suggestions');
+        const list = baseChips.filter(c=>!prefix || c.toLowerCase().includes(prefix.toLowerCase())).slice(0,6);
+        if(list.length===0){ box.style.display='none'; box.innerHTML=''; return; }
+        box.innerHTML = list.map(c=>`<button class=\"chip\" data-msg=\"${c}\">${c}</button>`).join('');
+        box.style.display='flex';
+        box.querySelectorAll('.chip').forEach(ch=>ch.addEventListener('click', ()=>{ el.input.value=ch.dataset.msg; updateCounter(); autoResize(); send(); }));
+    }
+
+    function updateCounter(){ const n = el.input.value.length; document.getElementById('char-counter').textContent = `${n}/2000`; }
+    function autoResize(){ el.input.style.height='auto'; el.input.style.height = Math.min(el.input.scrollHeight, 180) + 'px'; }
+
+    // Events
+    el.send.addEventListener('click', send);
+    el.input.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } });
+    el.input.addEventListener('input', ()=>{ updateCounter(); autoResize(); renderChips(el.input.value); });
+    el.palette.addEventListener('change', (e)=>{ const v=e.target.value; document.body.setAttribute('data-palette', v); localStorage.setItem('palette', v); });
+    // Text-to-Speech
+    function speak(text){
+        try{
+            if(!window.speechSynthesis){
+                toast('Text-to-speech not supported');
+                return;
+            }
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'en-US';
+            utterance.rate = 0.9;
+            utterance.pitch = 1;
+            speechSynthesis.speak(utterance);
+            toast('Playing audio...');
+        }catch(e){
+            console.error('TTS error:', e);
+            toast('Text-to-speech not supported');
+        }
+    }
+    
+    function speakLastAI(){
+        const nodes = [...document.querySelectorAll('.message.ai .text')];
+        if(nodes.length === 0){
+            toast('No AI message to read');
+            return;
+        }
+        const lastMessage = nodes[nodes.length-1].innerText;
+        speak(lastMessage);
+    }
+    
+    el.tts.addEventListener('click', speakLastAI);
+    // Notifications
+    function requestNotify(){
+        console.log('Requesting notification permission...');
+        
+        if(!('Notification' in window)){
+            toast('Notifications not supported in this browser');
+            return;
+        }
+        
+        // Check if already granted
+        if(Notification.permission === 'granted'){
+            toast('Notifications already enabled');
+            notify('Owl Ai', 'Notifications are working!');
+            return;
+        }
+        
+        // Check if denied
+        if(Notification.permission === 'denied'){
+            toast('Notifications blocked. Please enable in browser settings.');
+            return;
+        }
+        
+        // Request permission
+        try {
+            Notification.requestPermission().then(permission => {
+                console.log('Notification permission:', permission);
+                
+                if(permission === 'granted'){
+                    toast('Notifications enabled!');
+                    notify('Owl Ai', 'Notifications are now working!');
+                } else if(permission === 'denied'){
+                    toast('Notifications blocked. Enable in browser settings.');
+                } else {
+                    toast('Notification permission not granted');
+                }
+            }).catch(error => {
+                console.error('Notification permission error:', error);
+                toast('Error requesting notification permission');
+            });
+        } catch(e) {
+            console.error('Notification request failed:', e);
+            toast('Failed to request notification permission');
+        }
+    }
+    
+    function notify(title, body){
+        console.log('Sending notification:', title, body);
+        
+        if(!('Notification' in window)){
+            console.log('Notifications not supported');
+            return;
+        }
+        
+        if(Notification.permission !== 'granted'){
+            console.log('Notification permission not granted');
+            return;
+        }
+        
+        try{
+            const notification = new Notification(title, { 
+                body: body,
+                icon: 'https://static.vecteezy.com/system/resources/thumbnails/007/955/139/small_2x/black-owl-logo-free-vector.jpg',
+                badge: 'https://static.vecteezy.com/system/resources/thumbnails/007/955/139/small_2x/black-owl-logo-free-vector.jpg'
+            });
+            
+            notification.onclick = function() {
+                window.focus();
+                notification.close();
+            };
+            
+            console.log('Notification sent successfully');
+            
+        }catch(e){
+            console.error('Notification failed:', e);
+            toast('Failed to send notification');
+        }
+    }
+    
+    el.notifyToggle.addEventListener('click', function() {
+        console.log('Notification button clicked');
+        requestNotify();
+    });
+
+    // Reminders modal + storage
+    const REM_KEY='owl.reminders.v1';
+    function loadReminders(){
+        try{
+            return JSON.parse(localStorage.getItem(REM_KEY)||'[]');
+        }catch{
+            return [];
+        }
+    }
+    function saveReminders(list){
+        localStorage.setItem(REM_KEY, JSON.stringify(list));
+    }
+    function renderReminders(){
+        const list=loadReminders().sort((a,b)=>a.time-b.time);
+        const box=document.getElementById('reminders-list');
+        if(!box) return;
+        box.innerHTML=list.map(r=>
+            `<div class="rem-item" data-id="${r.id}">
+                <div>
+                    <strong>${new Date(r.time).toLocaleString()}</strong>
+                    <p>${escapeHtml(r.text)}</p>
+                </div>
+                <button class="btn rem-del" title="Delete"><i class="fas fa-trash"></i></button>
+            </div>`
+        ).join('');
+        box.querySelectorAll('.rem-del').forEach(btn=>
+            btn.addEventListener('click',(e)=>{
+                const id=e.currentTarget.parentElement.getAttribute('data-id');
+                const list=loadReminders().filter(x=>x.id!==id);
+                saveReminders(list);
+                renderReminders();
+            })
+        );
+    }
+    function openReminders(){
+        const m=document.getElementById('reminders-modal');
+        if(!m) return;
+        m.style.display='block';
+        renderReminders();
+    }
+    function closeReminders(){
+        const m=document.getElementById('reminders-modal');
+        if(!m) return;
+        m.style.display='none';
+    }
+    el.remindersBtn.addEventListener('click', openReminders);
+    document.getElementById('reminders-close').addEventListener('click', closeReminders);
+    document.getElementById('reminder-add').addEventListener('click', ()=>{
+        const text=document.getElementById('reminder-text').value.trim();
+        const when=document.getElementById('reminder-datetime').value;
+        if(!text||!when){
+            toast('Enter text and time');
+            return;
+        }
+        const list=loadReminders();
+        list.push({
+            id: Math.random().toString(36).slice(2),
+            text,
+            time:new Date(when).getTime(),
+            notified:false
+        });
+        saveReminders(list);
+        document.getElementById('reminder-text').value='';
+        document.getElementById('reminder-datetime').value='';
+        renderReminders();
+        toast('Reminder added');
+    });
+    // Check for due reminders every 15 seconds
+    setInterval(()=>{
+        const list=loadReminders();
+        const nowMs=Date.now();
+        let changed=false;
+        list.forEach(r=>{
+            if(!r.notified && r.time<=nowMs){
+                r.notified=true;
+                changed=true;
+                notify('Reminder', r.text);
+                appendMessage('ai', `Reminder: ${r.text}`);
+            }
+        });
+        if(changed) saveReminders(list);
+    }, 15000);
+
+    // Boot
+    updateCounter();
+    renderChips('');
+    // Welcome popup
+    setTimeout(()=>{
+        const t = document.createElement('div');
+        t.className = 'toast show';
+        t.innerHTML = '<img alt="Owl" class="avatar-img" style="width:24px;height:24px;vertical-align:middle;margin-right:8px;border-radius:50%" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOEAAADhCAMAAAAJbSJIAAAAh1BMVEX///8mJibw8PAAAAAjIyMRERGioqIfHx8XFxceHh4ZGRkbGxv6+voLCwsUFBQFBQXp6elpaWnj4+P19fVCQkLS0tK0tLR6enpxcXExMTG9vb3Hx8eIiIiqqqra2tpeXl6WlpY+Pj6KioqSkpI2NjZWVlakpKRISEh2dnbMzMxRUVEsLCxjY2NY9Rj+AAA"/> Welcome to Owl Ai!';
+        document.body.appendChild(t);
+        setTimeout(()=>{ t.classList.remove('show'); t.remove(); }, 2200);
+    }, 600);
+    // Load palette
+    const savedPalette = localStorage.getItem('palette') || 'aurora';
+    document.body.setAttribute('data-palette', savedPalette);
+    if (el.palette) el.palette.value = savedPalette;
+    </script>
+</body>
+</html>
+
